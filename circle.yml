@@ -1,0 +1,12 @@
+machine:
+  environment:
+    ANDROID_NDK_HOME: $ANDROID_NDK
+
+dependencies:
+  pre:
+    - npm install -g cordova
+
+test:
+  override:
+    - ./build 
+#   - RELEASE=1 ./build 

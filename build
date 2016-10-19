@@ -1,0 +1,56 @@
+#!/bin/bash
+set -e # halt on error
+hash="$(git rev-parse HEAD)"
+hash_short="${hash:0:4}"
+version=0.1
+
+set -x # be verbose
+
+
+platform_add_android(){
+  #android_platform_index="$(android list sdk | grep "2.3.3" | sed 's/^  //g;s/-.*//g')"
+  cordova platform add android@5.2.2 --save
+  # set compatibility to android >= 2.3.3 (sdk v10)
+  sed -i 's/minSdkVersion="[0-9]\+"/minSdkVersion="10" tools:overrideLibrary="org.apache.cordova"/g' platforms/android/AndroidManifest.xml
+  sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |g' platforms/android/AndroidManifest.xml
+  cat platforms/android/AndroidManifest.xml
+}
+
+build(){
+  cd src
+  if [[ ! -d platforms/android/cordova/node_modules ]]; then 
+    cd platforms/android/cordova; npm install ; cd -
+  fi
+  # build debug version
+  cordova build android
+  cp platforms/android/build/outputs/apk/android-debug.apk flyerbee-pop-v"$version"-"$hash_short"-debug.apk
+  # build release version
+  if [[ -n $RELEASE ]]; then
+    cordova build --release android
+    cp platforms/android/build/outputs/apk/android-release.apk flyerbee-pop-v"$version"-"$hash_short".apk
+  fi
+  if [[ -n $CIRCLE_ARTIFACTS ]]; then  # copy .apk files, so in circleci we can download them under the 'artifacts'-tab
+    cp flyerbee-*.apk $CIRCLE_ARTIFACTS/.
+  fi 
+}
+
+install_android_sdk(){
+  if [[ ! -d android-sdk-linux ]]; then
+    read -p "download android sdk? (y/n)" reply
+    [[ ! "$reply" == "y" ]] && return 0
+    wget "http://dl.google.com/android/android-sdk_r24.3.3-linux.tgz"
+    tar -xvf android-sdk_r24.3.3-linux.tgz
+    export PATH=$PATH:$(pwd)/android-sdk-linux/tools
+    export ANDROID_HOME=$(pwd)/android-sdk-linux
+    echo y | android update sdk --no-ui --filter platform-tools
+    #echo y | android update sdk --no-ui --filter android-24
+    #echo y | android update sdk --no-ui --filter 3 # download latest platformtarget
+    #android create avd -n native -t 1
+  fi
+}
+
+if which android; then 
+  build
+else
+  install_android_sdk
+fi
